@@ -1,99 +1,127 @@
 import * as THREE from "three";
 
-// Scene
+// SCENE
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87ceeb);
 
-// Camera
+// CAMERA
 const camera = new THREE.PerspectiveCamera(
-    75,
-    window.innerWidth / window.innerHeight,
-    0.1,
-    1000
+  75,
+  window.innerWidth / window.innerHeight,
+  0.1,
+  1000
 );
 
-// Renderer
+// RENDERER
 const renderer = new THREE.WebGLRenderer({
-    canvas: document.getElementById("game")
+  canvas: document.getElementById("game"),
+  antialias: true
 });
 renderer.setSize(window.innerWidth, window.innerHeight);
 
-// Licht
+// LIGHT
 const light = new THREE.DirectionalLight(0xffffff, 1);
-light.position.set(10, 10, 10);
+light.position.set(10, 20, 10);
 scene.add(light);
 
-// 🌍 GROND (MAP)
-const groundGeometry = new THREE.PlaneGeometry(50, 50);
-const groundMaterial = new THREE.MeshStandardMaterial({ color: 0x3cb371 });
-const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+// 🌍 GROUND
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(100, 100),
+  new THREE.MeshStandardMaterial({ color: 0x3cb371 })
+);
 ground.rotation.x = -Math.PI / 2;
 scene.add(ground);
 
-// 🙂 SPELER
-const playerGeometry = new THREE.BoxGeometry(1, 2, 1);
-const playerMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 });
-const player = new THREE.Mesh(playerGeometry, playerMaterial);
+// 🧍 PLAYER (capsule look)
+const player = new THREE.Mesh(
+  new THREE.CapsuleGeometry(0.5, 1, 4, 8),
+  new THREE.MeshStandardMaterial({ color: 0xff0000 })
+);
 player.position.y = 1;
 scene.add(player);
 
-// 🌳 simpele boom
-function createTree(x, z) {
-    const trunk = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.2, 0.2, 2),
-        new THREE.MeshStandardMaterial({ color: 0x8b4513 })
-    );
+// 🌳 tree
+function tree(x, z) {
+  const trunk = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.2, 0.2, 2),
+    new THREE.MeshStandardMaterial({ color: 0x8b5a2b })
+  );
+  trunk.position.set(x, 1, z);
 
-    const leaves = new THREE.Mesh(
-        new THREE.SphereGeometry(1),
-        new THREE.MeshStandardMaterial({ color: 0x228b22 })
-    );
+  const leaves = new THREE.Mesh(
+    new THREE.SphereGeometry(1),
+    new THREE.MeshStandardMaterial({ color: 0x228b22 })
+  );
+  leaves.position.set(x, 3, z);
 
-    trunk.position.set(x, 1, z);
-    leaves.position.set(x, 3, z);
-
-    scene.add(trunk);
-    scene.add(leaves);
+  scene.add(trunk, leaves);
 }
 
-// paar bomen
-createTree(5, 5);
-createTree(-5, -3);
-createTree(8, -6);
+tree(5, 5);
+tree(-6, -4);
 
-// 🎮 controls
+// 🎮 INPUT
 const keys = {};
+window.addEventListener("keydown", e => keys[e.key.toLowerCase()] = true);
+window.addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
 
-window.addEventListener("keydown", (e) => keys[e.key.toLowerCase()] = true);
-window.addEventListener("keyup", (e) => keys[e.key.toLowerCase()] = false);
+// 🖱️ MOUSE CAMERA (Roblox feel)
+let yaw = 0;
+let pitch = 0;
 
-// snelheid
-const speed = 0.15;
+document.body.addEventListener("mousemove", (e) => {
+  if (document.pointerLockElement === document.body) {
+    yaw -= e.movementX * 0.002;
+    pitch -= e.movementY * 0.002;
+    pitch = Math.max(-1.2, Math.min(1.2, pitch));
+  }
+});
 
-// 🚶 game loop
+document.body.addEventListener("click", () => {
+  document.body.requestPointerLock();
+});
+
+// SPEED
+const speed = 0.12;
+
+// LOOP
 function animate() {
-    requestAnimationFrame(animate);
+  requestAnimationFrame(animate);
 
-    // movement
-    if (keys["w"]) player.position.z -= speed;
-    if (keys["s"]) player.position.z += speed;
-    if (keys["a"]) player.position.x -= speed;
-    if (keys["d"]) player.position.x += speed;
+  // direction camera
+  const forward = new THREE.Vector3(
+    Math.sin(yaw),
+    0,
+    Math.cos(yaw)
+  );
 
-    // camera volgt speler
-    camera.position.x = player.position.x;
-    camera.position.z = player.position.z + 5;
-    camera.position.y = player.position.y + 5;
-    camera.lookAt(player.position);
+  const right = new THREE.Vector3(
+    Math.cos(yaw),
+    0,
+    -Math.sin(yaw)
+  );
 
-    renderer.render(scene, camera);
+  // movement (camera based like Roblox)
+  if (keys["w"]) player.position.addScaledVector(forward, -speed);
+  if (keys["s"]) player.position.addScaledVector(forward, speed);
+  if (keys["a"]) player.position.addScaledVector(right, -speed);
+  if (keys["d"]) player.position.addScaledVector(right, speed);
+
+  // camera follow (3rd person)
+  const camOffset = new THREE.Vector3(0, 2, 6);
+  camOffset.applyAxisAngle(new THREE.Vector3(0,1,0), yaw);
+
+  camera.position.copy(player.position).add(camOffset);
+  camera.lookAt(player.position.x, player.position.y + 1, player.position.z);
+
+  renderer.render(scene, camera);
 }
 
 animate();
 
 // resize
 window.addEventListener("resize", () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
 });
